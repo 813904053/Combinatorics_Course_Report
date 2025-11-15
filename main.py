@@ -1,45 +1,55 @@
+# 导入类
+from Button import Button
+from ClickDetector import ClickDetector
+import utils
+# 导入库
 import cv2
 from cvzone.HandTrackingModule import HandDetector
 from time import sleep
 import numpy as np
 import math
 from PIL import Image, ImageDraw, ImageFont
-import json
 
-def get_default_dict():
-    """默认的内置词库"""
-    return {
-        'wo': ['我', '窝', '握'],
-        'ni': ['你', '泥', '拟'],
-        'ta': ['他', '她', '它'],
-        'hao': ['好', '号', '豪'],
-        'shi': ['是', '时', '十']
-    }
 
-def load_chinese_dict(file_path="chinese_dict.json"):
-    """从JSON文件加载中文词库"""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print(f"词库文件 {file_path} 未找到，使用内置词库")
-        return get_default_dict()  # 返回一个默认的小词库
-    except json.JSONDecodeError as e:
-        print(f"JSON格式错误: {e}")
-        print("使用默认词库")
-        return get_default_dict()
-    except Exception as e:
-        print(f"加载词库失败: {e}，使用内置词库")
-        return get_default_dict()
+def HandsUpdate(hands, click_detector, buttonList):
+    hand = hands[0]
+    lmList = hand["lmList"]
 
-# 简化的中文词库
-CHINESE_DICT = load_chinese_dict("D:/Jupyter/Pose estimation/KeyBoard/chinese_dict.json")
+    if lmList and len(lmList) > 8:
+        current_hand_pos = (lmList[8][0], lmList[8][1])
 
+        hovered_button = click_detector.find_hovered_button(current_hand_pos, buttonList)
+        button_state = click_detector.update(current_hand_pos, hovered_button)
+
+        if button_state == "hover" and click_detector.current_button:
+            click_detector.current_button.state = "hover"
+
+        elif button_state == "pressing" and click_detector.current_button:
+            click_detector.current_button.state = "pressing"
+
+        elif button_state and isinstance(button_state, dict) and button_state["action"] == "complete":
+            clicked_button = button_state["button"]
+            clicked_button.state = "clicked"
+            handle_button_click(clicked_button.text)
+            sleep(0.15)
+            clicked_button.state = "normal"
+
+        for button in buttonList:
+            if (click_detector.current_button and
+                    button != click_detector.current_button and
+                    button.state != "normal"):
+                button.state = "normal"
+
+# 导入中文词库
+CHINESE_DICT = utils.load_chinese_dict("D:/Jupyter/Pose estimation/KeyBoard/chinese_dict.json")
+
+# 显示部分
 cap = cv2.VideoCapture(0)
 cap.set(3, 1280)
 cap.set(4, 720)
 detector = HandDetector(detectionCon=0.8)
 
+# UI部分
 keys = [
     ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
     ["A", "S", "D", "F", "G", "H", "J", "K", "L", "←"],
@@ -51,105 +61,6 @@ pinyin_input = ""
 candidates = []
 selected_index = 0
 input_mode = "chinese"
-
-
-class Button():
-    def __init__(self, pos, text, size=[85, 85]):
-        self.pos = pos
-        self.size = size
-        self.text = text
-        self.state = "normal"
-        self.tilted_corners = None
-        self.tilted_center = None
-
-    def set_tilted_geometry(self, corners, center):
-        self.tilted_corners = corners
-        self.tilted_center = center
-
-    def is_point_inside(self, point):
-        if point is None or self.tilted_corners is None:
-            return False
-        return cv2.pointPolygonTest(self.tilted_corners, point, False) >= 0
-
-    def get_color(self):
-        colors = {
-            "normal": (150, 150, 150, 150),
-            "hover": (175, 0, 175, 200),
-            "pressing": (0, 100, 255, 255),
-            "clicked": (0, 255, 0, 255)
-        }
-        return colors.get(self.state, (150, 150, 150, 150))
-
-
-class ClickDetector:
-    def __init__(self):
-        self.state = "IDLE"
-        self.prev_finger_y = None
-        self.current_button = None
-        self.press_threshold = 15
-        self.total_press_distance = 0
-
-    def find_hovered_button(self, finger_pos, buttonList):
-        for button in buttonList:
-            if button.is_point_inside(finger_pos):
-                return button
-        return None
-
-    def update(self, finger_pos, hovered_button):
-        current_finger_y = finger_pos[1]
-
-        if self.state == "IDLE":
-            if hovered_button is not None:
-                self.state = "HOVER"
-                self.current_button = hovered_button
-                self.prev_finger_y = current_finger_y
-                return "hover"
-            return None
-
-        elif self.state == "HOVER":
-            if hovered_button is None or hovered_button != self.current_button:
-                self.state = "IDLE"
-                self.current_button = None
-                return "leave"
-            else:
-                if self.prev_finger_y is not None:
-                    move_distance = current_finger_y - self.prev_finger_y
-                    if move_distance > 2:
-                        self.total_press_distance += move_distance
-                    if self.total_press_distance > self.press_threshold:
-                        self.state = "PRESS"
-                        return 'pressing'
-                self.prev_finger_y = current_finger_y
-                return "hover"
-
-        elif self.state == "PRESS":
-            if hovered_button is None or hovered_button != self.current_button:
-                self.state = "IDLE"
-                self.current_button = None
-                self.total_press_distance = 0
-                return "cancel"
-            else:
-                if self.prev_finger_y is not None:
-                    move_distance = current_finger_y - self.prev_finger_y
-                    if move_distance < -5:
-                        self.state = "CLICK"
-                        return "click"
-                    elif move_distance > 0:
-                        self.total_press_distance += move_distance
-                self.prev_finger_y = current_finger_y
-                return "pressing"
-
-        elif self.state == "CLICK":
-            clicked_button = self.current_button
-            self.state = "IDLE"
-            self.current_button = None
-            self.prev_finger_y = None
-            self.total_press_distance = 0
-            return {"action": "complete", "button": clicked_button}
-
-        self.prev_finger_y = current_finger_y
-        return None
-
 
 def put_chinese_text(img, text, position, font_size=30, color=(255, 255, 255)):
     """在OpenCV图像上绘制中文文本"""
@@ -170,7 +81,6 @@ def put_chinese_text(img, text, position, font_size=30, color=(255, 255, 255)):
     draw.text(position, text, font=font, fill=color)
     return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
-
 def get_pinyin_candidates(pinyin_str):
     """根据拼音获取候选词"""
     if pinyin_str in CHINESE_DICT:
@@ -181,7 +91,6 @@ def get_pinyin_candidates(pinyin_str):
             if key.startswith(pinyin_str):
                 matches.extend(words)
         return matches[:5] if matches else []
-
 
 def handle_button_click(button_text):
     """处理按钮点击事件"""
@@ -232,7 +141,6 @@ def handle_button_click(button_text):
             finalText = ""
         elif len(button_text) == 1:
             finalText += button_text
-
 
 def create_keyboard(img, buttonList, tilt_angle=-30):
     """创建倾斜键盘"""
@@ -370,7 +278,6 @@ for i in range(len(keys)):
 
 click_detector = ClickDetector()
 
-
 while True:
     success, img = cap.read()
     if not success:
@@ -382,34 +289,9 @@ while True:
     current_hand_pos = None
 
     if hands:
-        hand = hands[0]
-        lmList = hand["lmList"]
+        HandsUpdate(hands, click_detector, buttonList)
 
-        if lmList and len(lmList) > 8:
-            current_hand_pos = (lmList[8][0], lmList[8][1])
-
-            hovered_button = click_detector.find_hovered_button(current_hand_pos, buttonList)
-            result = click_detector.update(current_hand_pos, hovered_button)
-
-            if result == "hover" and click_detector.current_button:
-                click_detector.current_button.state = "hover"
-
-            elif result == "pressing" and click_detector.current_button:
-                click_detector.current_button.state = "pressing"
-
-            elif result and isinstance(result, dict) and result["action"] == "complete":
-                clicked_button = result["button"]
-                clicked_button.state = "clicked"
-                handle_button_click(clicked_button.text)
-                sleep(0.15)
-                clicked_button.state = "normal"
-
-            for button in buttonList:
-                if (click_detector.current_button and
-                        button != click_detector.current_button and
-                        button.state != "normal"):
-                    button.state = "normal"
-
+    # 加入键盘
     img = create_keyboard(img, buttonList)
 
     # 显示输入文本区域
