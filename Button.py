@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 
 class Button():
     def __init__(self, pos, text, size=[85, 85]):
@@ -8,6 +9,23 @@ class Button():
         self.state = "normal"
         self.tilted_corners = None
         self.tilted_center = None
+
+        self.points = np.float32([
+            [self.pos[0], self.pos[1]],
+            [self.pos[0] + self.size[0], self.pos[1]],
+            [self.pos[0] + self.size[0], self.pos[1] + self.size[1]],
+            [self.pos[0], self.pos[1] + self.size[1]]
+        ])
+
+    def pos_adjust(self, keyboard_pos, offset):
+        self.pos = [self.pos[0] + keyboard_pos[0] + offset,
+                      self.pos[1] + keyboard_pos[1] + offset]
+        self.points = np.float32([
+            [self.pos[0], self.pos[1]],
+            [self.pos[0] + self.size[0], self.pos[1]],
+            [self.pos[0] + self.size[0], self.pos[1] + self.size[1]],
+            [self.pos[0], self.pos[1] + self.size[1]]
+        ])
 
     def set_tilted_geometry(self, corners, center):
         self.tilted_corners = corners
