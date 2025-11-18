@@ -1,5 +1,8 @@
+from Event import EventBus, ButtonEvent
+
 class ClickDetector:
-    def __init__(self):
+    def __init__(self, id):
+        self.id = id
         self.state = "IDLE"
         self.prev_finger_y = None
         self.current_button = None
@@ -20,49 +23,63 @@ class ClickDetector:
                 self.state = "HOVER"
                 self.current_button = hovered_button
                 self.prev_finger_y = current_finger_y
-                return "hover"
-            return None
+                EventBus.publish(ButtonEvent.IDLE_HOVER, {
+                    "button": hovered_button,
+                    "finger_id": self.id
+                })
 
         elif self.state == "HOVER":
             if hovered_button is None or hovered_button != self.current_button:
                 self.state = "IDLE"
+                EventBus.publish(ButtonEvent.HOVER_IDLE, {
+                    "button": self.current_button,
+                    "finger_id": self.id
+                })
                 self.current_button = None
-                return "leave"
+
             else:
                 if self.prev_finger_y is not None:
                     move_distance = current_finger_y - self.prev_finger_y
                     if move_distance > 2:
                         self.total_press_distance += move_distance
                     if self.total_press_distance > self.press_threshold:
+                        EventBus.publish(ButtonEvent.HOVER_PRESS, {         # HOVER-->PRESS
+                            "button": self.current_button,
+                            "finger_id": self.id
+                        })
                         self.state = "PRESS"
-                        return 'pressing'
+
+
                 self.prev_finger_y = current_finger_y
-                return "hover"
 
         elif self.state == "PRESS":
             if hovered_button is None or hovered_button != self.current_button:
+                EventBus.publish(ButtonEvent.PRESS_IDLE, {
+                    "button": self.current_button,
+                    "finger_id": self.id
+                })
                 self.state = "IDLE"
-                self.current_button = None
                 self.total_press_distance = 0
-                return "cancel"
+                self.current_button = None
+
             else:
                 if self.prev_finger_y is not None:
                     move_distance = current_finger_y - self.prev_finger_y
                     if move_distance < -5:
+                        EventBus.publish(ButtonEvent.PRESS_CLICK, {
+                            "button": self.current_button,
+                            "finger_id": self.id
+                        })
                         self.state = "CLICK"
-                        return "click"
                     elif move_distance > 0:
                         self.total_press_distance += move_distance
                 self.prev_finger_y = current_finger_y
-                return "pressing"
 
         elif self.state == "CLICK":
-            clicked_button = self.current_button
             self.state = "IDLE"
             self.current_button = None
             self.prev_finger_y = None
             self.total_press_distance = 0
-            return {"action": "complete", "button": clicked_button}
 
         self.prev_finger_y = current_finger_y
         return None

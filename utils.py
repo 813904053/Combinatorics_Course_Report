@@ -1,4 +1,5 @@
 import config
+from Event import EventBus, GestureEvent
 import cv2
 import cvzone
 import json
@@ -6,7 +7,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import math
 from time import sleep
-
+import time
 
 # 默认词库（如果没有json文件）
 def get_default_dict():
@@ -186,7 +187,7 @@ def draw_rectangle_button(img, keyboard, alpha=0.3, angle=-30):
         )[0].astype(np.int32)
 
         # 绘制按钮
-        cv2.fillConvexPoly(overlay, button.tilted_corners, button.get_color())
+        cv2.fillConvexPoly(overlay, button.tilted_corners, (*button.color, 200))  # 150是透明度
 
         # 绘制按钮文字
         if button.text:
@@ -243,7 +244,7 @@ def draw_rectangle_button(img, keyboard, alpha=0.3, angle=-30):
 # 绘制候选区
 def draw_candidates(img):
     candidate_h = 60
-    cv2.rectangle(img, (0, 100), (0, candidate_h), (100, 100, 100, 200), cv2.FILLED)
+    cv2.rectangle(img, (0, 100), (300, 100+candidate_h), (100, 100, 100, 200), cv2.FILLED)
 
     # 使用PIL绘制中文
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
@@ -262,7 +263,7 @@ def draw_candidates(img):
             font_smaller = ImageFont.load_default()
 
     # 绘制拼音
-    draw.text((10, 125), f"拼音: {config.pinyin_input}", font=font_small, fill=(255, 255, 255, 255))
+    draw.text((10, 105), f"拼音: {config.pinyin_input}", font=font_small, fill=(255, 255, 255, 255))
 
     # 绘制候选词
     candidate_text = "候选: "
@@ -271,7 +272,7 @@ def draw_candidates(img):
             candidate_text += f"[{word}] "
         else:
             candidate_text += f"{word} "
-    draw.text((10, 100), candidate_text, font=font_smaller, fill=(255, 255, 255, 255))
+    draw.text((10, 125), candidate_text, font=font_smaller, fill=(255, 255, 255, 255))
 
     img = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGBA2BGRA)
     return img
@@ -365,27 +366,111 @@ def HandsUpdate(hands, click_detector, buttonList):
     hand = hands[0]
     lmList = hand["lmList"]
 
-    if lmList and len(lmList) > 8:
-        current_hand_pos = (lmList[8][0], lmList[8][1])
+    joint = config.id2joint[click_detector.id]
+
+    if lmList and len(lmList) > joint:
+        current_hand_pos = (lmList[joint][0], lmList[joint][1])
 
         hovered_button = click_detector.find_hovered_button(current_hand_pos, buttonList)
-        button_state = click_detector.update(current_hand_pos, hovered_button)
+        click_detector.update(current_hand_pos, hovered_button)
 
-        if button_state == "hover" and click_detector.current_button:
-            click_detector.current_button.state = "hover"
 
-        elif button_state == "pressing" and click_detector.current_button:
-            click_detector.current_button.state = "pressing"
+def get_angle(v1,v2):
+    angle = np.dot(v1,v2)/(np.sqrt(np.sum(v1*v1))*np.sqrt(np.sum(v2*v2)))
+    angle = np.arccos(angle)/3.14*180
+    return angle
 
-        elif button_state and isinstance(button_state, dict) and button_state["action"] == "complete":
-            clicked_button = button_state["button"]
-            clicked_button.state = "clicked"
-            handle_button_click(clicked_button.text)
-            sleep(0.1)
-            clicked_button.state = "normal"
 
-        for button in buttonList:
-            if (click_detector.current_button and
-                    button != click_detector.current_button and
-                    button.state != "normal"):
-                button.state = "normal"
+def get_str_guester(up_fingers, list_lms):
+    if len(up_fingers) == 1 and up_fingers[0] == 8:
+
+        v1 = list_lms[6] - list_lms[7]
+        v2 = list_lms[8] - list_lms[7]
+
+        angle = get_angle(v1, v2)
+
+        if angle < 160:
+            str_guester = "9"
+        else:
+            str_guester = "1"
+
+    elif len(up_fingers) == 1 and up_fingers[0] == 4:
+        str_guester = "thumbs_up"
+
+    elif len(up_fingers) == 1 and up_fingers[0] == 20:
+        str_guester = "Bad"
+
+    elif len(up_fingers) == 1 and up_fingers[0] == 12:
+        str_guester = "FXXX"
+
+    elif len(up_fingers) == 2 and up_fingers[0] == 8 and up_fingers[1] == 12:
+        str_guester = "2"
+
+    elif len(up_fingers) == 2 and up_fingers[0] == 4 and up_fingers[1] == 20:
+        str_guester = "6"
+
+    elif len(up_fingers) == 2 and up_fingers[0] == 4 and up_fingers[1] == 8:
+        str_guester = "8"
+
+    elif len(up_fingers) == 3 and up_fingers[0] == 8 and up_fingers[1] == 12 and up_fingers[2] == 16:
+        str_guester = "3"
+
+    elif len(up_fingers) == 3 and up_fingers[0] == 4 and up_fingers[1] == 8 and up_fingers[2] == 12:
+
+        dis_8_12 = list_lms[8, :] - list_lms[12, :]
+        dis_8_12 = np.sqrt(np.dot(dis_8_12, dis_8_12))
+
+        dis_4_12 = list_lms[4, :] - list_lms[12, :]
+        dis_4_12 = np.sqrt(np.dot(dis_4_12, dis_4_12))
+
+        if dis_4_12 / (dis_8_12 + 1) < 3:
+            str_guester = "7"
+
+        elif dis_4_12 / (dis_8_12 + 1) > 5:
+            str_guester = "Gun"
+        else:
+            str_guester = "7"
+
+    elif len(up_fingers) == 3 and up_fingers[0] == 4 and up_fingers[1] == 8 and up_fingers[2] == 20:
+        str_guester = "ROCK"
+
+    elif len(up_fingers) == 4 and up_fingers[0] == 8 and up_fingers[1] == 12 and up_fingers[2] == 16 and up_fingers[
+        3] == 20:
+        str_guester = "4"
+
+    elif len(up_fingers) == 5:
+        str_guester = "5"
+
+    elif len(up_fingers) == 0:
+        str_guester = "fist"
+
+    else:
+        str_guester = " "
+
+    return str_guester
+
+
+def check_and_publish_gesture(str_guester, up_fingers, gesture_handler):
+    if gesture_handler.gesture_cooldown > 0:
+        gesture_handler.gesture_cooldown -= 1
+        return
+
+    if str_guester != gesture_handler.last_gesture and str_guester in ["thumbs_up", "fist", "open_hand", "victory", "ok"]:
+        # 映射手势名称到事件类型
+        gesture_event_map = {
+            "thumbs_up": GestureEvent.THUMBS_UP,
+            "fist": GestureEvent.FIST,  # 握拳
+            "5": GestureEvent.OPEN_HAND,  # 手掌张开
+            "2": GestureEvent.VICTORY,  # 比耶
+            "8": GestureEvent.OK  # OK手势
+        }
+
+        event_type = gesture_event_map.get(str_guester)
+        if event_type:
+            EventBus.publish(event_type, {
+                "gesture_type": str_guester,
+                "up_fingers": up_fingers,
+                "timestamp": time.time()
+            })
+            gesture_handler.last_gesture = str_guester
+            gesture_handler.gesture_cooldown = 10  # 冷却时间
