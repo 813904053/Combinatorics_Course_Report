@@ -1,5 +1,6 @@
 from Event import EventBus, ButtonEvent
 
+
 class ClickDetector:
     def __init__(self, id):
         self.id = id
@@ -15,7 +16,7 @@ class ClickDetector:
                 return button
         return None
 
-    def update(self, finger_pos, hovered_button):
+    def update(self, finger_pos, hovered_button, input_controller):
         current_finger_y = finger_pos[1]
 
         if self.state == "IDLE":
@@ -68,7 +69,8 @@ class ClickDetector:
                     if move_distance < -5:
                         EventBus.publish(ButtonEvent.PRESS_CLICK, {
                             "button": self.current_button,
-                            "finger_id": self.id
+                            "finger_id": self.id,
+                            "input_controller" : input_controller
                         })
                         self.state = "CLICK"
                     elif move_distance > 0:
@@ -76,6 +78,10 @@ class ClickDetector:
                 self.prev_finger_y = current_finger_y
 
         elif self.state == "CLICK":
+            EventBus.publish(ButtonEvent.CLICK_IDLE, {
+                "button": self.current_button,
+                "finger_id": self.id
+            })
             self.state = "IDLE"
             self.current_button = None
             self.prev_finger_y = None

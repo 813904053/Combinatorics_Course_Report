@@ -50,7 +50,7 @@ transform = transforms.Compose([
 ])
 
 # 加载数据集（用于获取类别名称）
-data_path = "./dataset"
+data_path = "./SkeletonRecognition/dataset"
 full_dataset = datasets.ImageFolder(root=data_path, transform=transform)
 
 # 获取类别名称

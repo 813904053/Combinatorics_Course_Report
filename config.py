@@ -16,3 +16,7 @@ CHINESE_DICT = {}
 id2joint = {0:8, 1:12, 2:16, 3:20, 4:4}
 
 finalText = ""
+
+can_type_in = True
+
+confidence_threshold=0.9

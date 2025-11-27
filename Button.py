@@ -3,6 +3,7 @@ import utils
 import cv2
 import numpy as np
 
+
 class Button():
     def __init__(self, pos, text, size=[85, 85]):
         self.pos = pos
@@ -12,7 +13,7 @@ class Button():
         self.tilted_corners = None
         self.tilted_center = None
 
-        self.is_func = self.text in ("中/英", "空格", "确认", "清空")
+        self.is_func = self.text in ("中/英", "空格", "确认", "清空", "删除", "<", ">")
 
         self.points = np.float32([
             [self.pos[0], self.pos[1]],
@@ -27,6 +28,7 @@ class Button():
         EventBus.subscribe(ButtonEvent.HOVER_PRESS, self.hover_press_call)
         EventBus.subscribe(ButtonEvent.PRESS_IDLE, self.press_idle_call)
         EventBus.subscribe(ButtonEvent.PRESS_CLICK, self.press_click_call)
+        EventBus.subscribe(ButtonEvent.CLICK_IDLE, self.click_idle_call)
 
     # 校正位置
     def pos_adjust(self, keyboard_pos, offset):
@@ -63,4 +65,9 @@ class Button():
     def press_click_call(self, data):
         if data["button"] == self:
             self.color = (0, 255, 0)
-            utils.handle_button_click(self.text)
+            input_controller = data["input_controller"]
+            input_controller.button_function(self.text)
+
+    def click_idle_call(self, data):
+        if data["button"] == self:
+            self.color = (150, 150, 150)

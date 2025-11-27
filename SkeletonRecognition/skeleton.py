@@ -16,7 +16,7 @@ imgSize = 300
 while True:
     label = input("请输入数字标签 (0-9): ")
     if label.isdigit():  # 检查是否是数字
-        folder = "./dataset/" + label
+        folder = os.path.join("./dataset", label)
         print(f"数据将保存到: {folder}")
         break
     else:
@@ -122,7 +122,9 @@ while True:
     # 按's'键保存骨架图像（只在检测到手部时保存）
     if key == ord("s") and hands:
         counter += 1
-        cv2.imwrite(f'{folder}/{label}_Skeleton_{time.time()}.png', skeleton_img)
+        # 使用os.path.join确保路径分隔符在不同操作系统上正确工作
+        img_path = os.path.join(folder, f'{label}_Skeleton_{time.time()}.png')
+        cv2.imwrite(img_path, skeleton_img)
         print(f"保存第 {counter} 张骨架图像")
 
     # 按'q'键退出循环

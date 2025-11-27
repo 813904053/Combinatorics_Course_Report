@@ -83,7 +83,7 @@ def predict(test_loader, model, device, class_names):
             print(f'{class_names[i]}: {class_acc:.2f}% ({class_correct[i]}/{class_total[i]})')
 
 
-# 神经网络（使用你原来的简单版本）
+# 神经网络
 class SimpleCNN(nn.Module):
     def __init__(self, num_class):
         super(SimpleCNN, self).__init__()
@@ -113,7 +113,7 @@ class SimpleCNN(nn.Module):
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 config = {
     'learning_rate': 0.001,
-    'n_epochs': 15,
+    'n_epochs': 20,
     'batch_size': 8
 }
 
@@ -126,7 +126,7 @@ transform = transforms.Compose([
     transforms.Normalize((0.5,), (0.5,))
 ])
 
-data_path = "./dataset"
+data_path = "./SkeletonRecognition/dataset"
 
 # 检查路径是否存在
 if not os.path.exists(data_path):
@@ -165,7 +165,7 @@ else:
     predict(test_loader, model, device, class_names)
 
     # 保存模型
-    torch.save(model.state_dict(), 'gesture_classifier.pth')
-    print("\n模型已保存为 'gesture_classifier.pth'")
-
-print('done!')
+    model_path = os.path.join(data_path, 'gesture_classifier.pth')
+    torch.save(model.state_dict(), model_path)
+    print(f"\n模型已保存为: {os.path.basename(model_path)}")
+    print(f"保存路径: {os.path.abspath(model_path)}")
