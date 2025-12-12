@@ -25,15 +25,22 @@ class InputController(Controller):
                 config.candidates = []
             elif button_text == "空格":
                 if config.candidates:
-                    config.finalText += config.candidates[config.selected_index]
+                    selected_char = config.candidates[config.selected_index]
+                    config.finalText += selected_char
+                    # 使用type方法将中文字符输入到系统
+                    self.type(selected_char)
                     config.pinyin_input = ""
                     config.candidates = []
                     config.selected_index = 0
                 else:
                     config.finalText += " "
+                    self.press(" ")
             elif button_text == "确认":
                 if config.candidates:
-                    config.finalText += config.candidates[config.selected_index]
+                    selected_char = config.candidates[config.selected_index]
+                    config.finalText += selected_char
+                    # 使用type方法将中文字符输入到系统
+                    self.type(selected_char)
                     config.pinyin_input = ""
                     config.candidates = []
                     config.selected_index = 0
@@ -46,8 +53,9 @@ class InputController(Controller):
                     config.pinyin_input = config.pinyin_input[:-1]
                     config.candidates = utils.get_pinyin_candidates(config.pinyin_input)
                     config.selected_index = 0
-                else:
-                    config.finalText = config.finalText[:-1] if config.finalText else ""
+                elif config.finalText:
+                    config.finalText = config.finalText[:-1]
+                    #self.press("backspace")
             elif button_text == "<":
                 if config.pinyin_input:
                     config.selected_index = max(0, config.selected_index-1)
@@ -62,11 +70,15 @@ class InputController(Controller):
         else:
             if button_text == "中/英":
                 config.input_mode = "chinese"
-            elif button_text == "←":
-                config.finalText = config.finalText[:-1] if config.finalText else ""
+            elif button_text == "删除":
+                if config.finalText:
+                    config.finalText = config.finalText[:-1]
+                    self.press("backspace")
             elif button_text == "空格":
                 config.finalText += " "
+                self.press("space")
             elif button_text == "清空":
                 config.finalText = ""
             elif len(button_text) == 1:
                 config.finalText += button_text
+                self.press(button_text)

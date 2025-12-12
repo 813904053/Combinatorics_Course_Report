@@ -41,7 +41,6 @@ keyboard = Keyboard(buttonList)
 
 click_detectors = [ClickDetector(i) for i in range(5)]  # 0:食指, 1:中指, 2:无名指, 3:小指
 
-
 # 帧率
 fps_start_time = time.time()
 frame_count = 0
@@ -52,30 +51,79 @@ gesture_handler = GestureHandler()
 # 在电脑上输入
 input_controller = InputController()
 
-# 神经网络定义（必须与训练时相同）
-class SimpleCNN(nn.Module):
+# 通道注意力模块（用于注意力机制）
+class ChannelAttention(nn.Module):
+    def __init__(self, in_channels, reduction_ratio=16):
+        super(ChannelAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        # 注意：CNN_Compare中缺少max_pool的定义，但forward中使用了
+        # 这里我们添加max_pool以保持兼容性
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        
+        self.fc = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels // reduction_ratio, 1, bias=False),
+            nn.ReLU(),
+            nn.Conv2d(in_channels // reduction_ratio, in_channels, 1, bias=False)
+        )
+        self.sigmoid = nn.Sigmoid()
+    
+    def forward(self, x):
+        avg_out = self.fc(self.avg_pool(x))
+        max_out = self.fc(self.max_pool(x))
+        out = avg_out + max_out
+        return self.sigmoid(out) * x
+
+
+class AttentionCNN(nn.Module):
     def __init__(self, num_class):
-        super(SimpleCNN, self).__init__()
-        self.layers = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=3, padding=1), nn.ReLU(),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(16, 32, kernel_size=3, padding=1), nn.ReLU(),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(32, 32, kernel_size=3, padding=1), nn.ReLU(),
-            nn.MaxPool2d(2),
-
-            nn.AdaptiveAvgPool2d((8, 8)),
+        super(AttentionCNN, self).__init__()
+        # 特征提取部分
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
+        self.relu1 = nn.ReLU()
+        self.pool1 = nn.MaxPool2d(2)
+        
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
+        self.relu2 = nn.ReLU()
+        self.pool2 = nn.MaxPool2d(2)
+        
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
+        self.relu3 = nn.ReLU()
+        self.pool3 = nn.MaxPool2d(2)
+        
+        # 只在最后一层添加注意力
+        self.attention = ChannelAttention(32, reduction_ratio=8)
+        
+        # 分类器（与CNN_Compare相同）
+        self.avg_pool = nn.AdaptiveAvgPool2d((8, 8))
+        self.classifier = nn.Sequential(
             nn.Flatten(),
-
             nn.Linear(32 * 8 * 8, 64), nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(64, num_class)
         )
 
     def forward(self, x):
-        return self.layers(x)
+        x = self.conv1(x)
+        x = self.relu1(x)
+        x = self.pool1(x)
+        
+        x = self.conv2(x)
+        x = self.relu2(x)
+        x = self.pool2(x)
+        
+        x = self.conv3(x)
+        x = self.relu3(x)
+        x = self.pool3(x)
+        
+        # 应用注意力
+        x = self.attention(x)
+        
+        # 应用平均池化
+        x = self.avg_pool(x)
+        
+        # 使用分类器
+        x = self.classifier(x)
+        return x
 
 # 置信度阈值
 confidence_threshold = 0.9
@@ -98,8 +146,9 @@ print(f"分类个数：{num_classes}")
 
 # 加载PyTorch模型
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model = SimpleCNN(num_classes)
-model.load_state_dict(torch.load('./SkeletonRecognition/gesture_classifier.pth', map_location=device))
+model = AttentionCNN(num_classes)
+# 添加strict=False参数以忽略权重文件中额外的计算量统计信息
+model.load_state_dict(torch.load('./SkeletonRecognition/best_model_AttentionCNN.pth', map_location=device), strict=False)
 model.eval()
 
 
@@ -199,6 +248,8 @@ while True:
 
 
     hands, img = detector.findHands(img)
+
+    hands = utils.apply_kalman_filter_to_hands(hands)
 
     current_hand_pos = None
 

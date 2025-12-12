@@ -16,7 +16,7 @@ imgSize = 300
 while True:
     label = input("请输入数字标签 (0-9): ")
     if label.isdigit():  # 检查是否是数字
-        folder = os.path.join("./dataset", label)
+        folder = os.path.join("./SkeletonRecognition/dataset", label)
         print(f"数据将保存到: {folder}")
         break
     else:

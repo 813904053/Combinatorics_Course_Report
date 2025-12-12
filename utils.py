@@ -8,7 +8,9 @@ from PIL import Image, ImageDraw, ImageFont
 import math
 from time import sleep
 import time
+from Kalmanfilter import MultiHandKalmanFilter
 
+hand_kalman_filter = MultiHandKalmanFilter(process_variance=0.01, measurement_variance=0.1)
 
 # 默认词库（如果没有json文件）
 def get_default_dict():
@@ -218,6 +220,18 @@ def HandsUpdate(hands, click_detector, buttonList, input_controller):
         hovered_button = click_detector.find_hovered_button(current_hand_pos, buttonList)
         click_detector.update(current_hand_pos, hovered_button, input_controller)
 
+
+def apply_kalman_filter_to_hands(hands):
+    """
+    对检测到的手部关键点应用卡尔曼滤波
+
+    Args:
+        hands: 手部检测结果列表
+
+    Returns:
+        应用滤波后的手部列表
+    """
+    return hand_kalman_filter.update(hands)
 
 # 手势识别
 def check_and_publish_gesture(guester, gesture_handler):
